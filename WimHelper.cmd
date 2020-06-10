@@ -61,32 +61,22 @@ call :GetImageInfo "%~1", "%~2"
 title 正在处理 [%~2] 镜像 %ImageName% 版本 %ImageVersion% 语言 %ImageLanguage%
 %Dism% /Mount-Wim /WimFile:"%~1" /Index:%~2 /MountDir:"%MNT%"
 call :MakeWimClean "%MNT%"
-rem 处理Admin分卷
-for /f "tokens=3" %%f in ('%Dism% /English /Get-ImageInfo /ImageFile:"%~1" ^| findstr /i Index') do ( set "Index=%%f" )
-if "%Index%" leq "%ImageCount%" goto :eof
-%Dism% /Export-Image /SourceImageFile:"%~1" /SourceIndex:%~2 /DestinationImageFile:"%TMP%\%~nx1"
-%Dism% /Export-Image /SourceImageFile:"%~1" /SourceIndex:%Index% /DestinationImageFile:"%TMP%\%~nx1" /DestinationName:"%ImageName% [Admin]"
 goto :eof
 
 
 rem 处理原版镜像 [ %~1 : 镜像挂载路径 ]
 :MakeWimClean
 call :RemoveAppx "%~1"
-for /f %%f in ('type "%~dp0Pack\CapabilityList.%ImageShortVersion%.txt" 2^>nul') do call :RemoveCapability "%~1", "%%f"
+for /f %%f in ('type "%~dp0Pack\FeatureList.%ImageShortVersion%.txt" 2^>nul') do call :RemoveCapability "%~1", "%%f"
 for /f %%f in ('type "%~dp0Pack\RemoveList.%ImageVersion%.txt" 2^>nul') do call :RemoveComponent "%~1", "%%f"
 call :IntRollupFix "%~1"
-rem call :AddAppx "%~1", "DesktopAppInstaller", "VCLibs.14"
-call :AddAppx "%~1", "Store", "VCLibs.14 Runtime.1.7 Framework.1.7"
+call :AddAppx "%~1", "DesktopAppInstaller", "VCLibs"
+call :AddAppx "%~1", "Store", "VCLibs Runtime Framework"
 call :AddAppx "%~1", "WindowsCalculator"
 call :AddAppx "%~1", "XboxGamingOverlay"
 call :ImportOptimize "%~1"
 call :ImportUnattend "%~1"
-call :ImageClean "%~1"
-%Dism% /Commit-Image /MountDir:"%~1"
-call :ImportUnattend "%~1", "Admin"
-call :ImageClean "%~1"
-%Dism% /Commit-Image /MountDir:"%~1" /Append
-%Dism% /Unmount-Wim /MountDir:"%~1" /Discard
+%Dism% /Unmount-Wim /MountDir:"%~1" /Commit
 goto :eof
 
 rem 处理OEM镜像 [ %~1 : 镜像文件路径, %~2 : 镜像序号 ]
@@ -94,22 +84,31 @@ rem 处理OEM镜像 [ %~1 : 镜像文件路径, %~2 : 镜像序号 ]
 call :GetImageInfo "%~1", "%~2"
 title 正在处理 [%~2] 镜像 %ImageName% 版本 %ImageVersion% 语言 %ImageLanguage%
 %Dism% /Mount-Wim /WimFile:"%~1" /Index:%~2 /MountDir:"%MNT%"
-call :AddAppx "%MNT%", "WacomTechnologyCorp", "VCLibs.14 Runtime.1.4 Framework.1.3"
+call :RemoveAppx "%MNT%"
+for /f %%f in ('type "%~dp0Pack\FeatureList.%ImageShortVersion%.txt" 2^>nul') do call ::RemoveCapability "%MNT%", "%%f"
+for /f %%f in ('type "%~dp0Pack\RemoveList.%ImageVersion%.txt" 2^>nul') do call :RemoveComponent "%MNT%", "%%f"
+call :IntRollupFix "%MNT%"
+call :AddAppx "%MNT%", "DesktopAppInstaller", "VCLibs"
+call :AddAppx "%MNT%", "Store", "VCLibs Runtime Framework"
+call :AddAppx "%MNT%", "WacomTechnologyCorp", "UWPDesktop"
+call :ImportOptimize "%MNT%"
 call :ImportUnattend "%MNT%", "OEM"
 if exist "%~dp0Driver" %Dism% /Image:"%MNT%" /Add-Driver /Driver:"%~dp0Driver" /recurse /ForceUnsigned 
 call :ImageClean "%MNT%"
-%Dism% /Commit-Image /MountDir:"%MNT%" /Append
-%Dism% /Unmount-Wim /MountDir:"%MNT%" /Discard
+%Dism% /Unmount-Wim /MountDir:"%MNT%" /Commit
 goto :eof
 
 rem 处理lopatkin镜像 [ %~1 : 镜像挂载路径 ]
 :lopatkin
 rem 修复默认用户头像
 xcopy /E /I /H /R /Y /J "%SRC%\ProgramData\Microsoft\User Account Pictures\*.*" "%~1\ProgramData\Microsoft\User Account Pictures" >nul
+
 call :MountImageRegistry "%~1"
 rem 修复默认主题
 call :RemoveFolder "%~1\Windows\Web\Wallpaper\Theme1"
 call :RemoveFile "%~1\Windows\Resources\Themes\Theme1.theme"
+move "%~1\ProgramData\Microsoft\Windows\Start Menu\Programs\Accessories\Калькулятор.lnk" "%~1\ProgramData\Microsoft\Windows\Start Menu\Programs\Accessories\Calculator.lnk"
+notepad "%~1\ProgramData\Microsoft\Windows\Start Menu\Programs\Accessories\desktop.ini"
 reg add "HKLM\TK_SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\LastTheme" /v "ThemeFile" /t REG_EXPAND_SZ /d "%%SystemRoot%%\Resources\Themes\Aero.theme" /f >nul
 rem 修复设备管理器英文
 for /f "tokens=2 delims=@," %%j in ('reg query "HKLM\TK_SYSTEM\ControlSet001\Control\Class" /v "ClassDesc" /s ^| findstr /i inf') do (
@@ -118,6 +117,7 @@ for /f "tokens=2 delims=@," %%j in ('reg query "HKLM\TK_SYSTEM\ControlSet001\Con
     )
 )
 call :UnMountImageRegistry
+rem call :AddAppx "%~1", "Store", "VCLibs.14 Runtime.1.7 Framework.1.7"
 call :RemoveFolder "%~1\Program Files (x86)\Trey"
 call :RemoveFolder "%~1\Program Files\Trey"
 call :RemoveFile "%~1\Users\Default\Desktop\Green Christmas Tree.lnk"
@@ -136,24 +136,29 @@ rem ############################################################################
 rem 集成积累更新 [ %~1 : 镜像挂载路径 ]
 :IntRollupFix
 setlocal
-call :MountImageRegistry "%~1"
-rem Enable DISM Image Cleanup with Full ResetBase...
-Reg add "HKLM\TK_SOFTWARE\Microsoft\Windows\CurrentVersion\SideBySide\Configuration" /v "DisableResetbase" /t REG_DWORD /d "0" /f >nul
-call :UnMountImageRegistry
 set "UpdatePath=%~dp0Pack\Update\%ImageVersion%.%ImageArch%"
 if exist "%UpdatePath%" (
     %Dism% /Image:"%~1" /Add-Package /ScratchDir:"%TMP%" /PackagePath:"%UpdatePath%"
-rem %Dism% /Image:"%~1" /Cleanup-Image /ScratchDir:"%TMP%" /StartComponentCleanup /ResetBase
 )
-call :IntFeature "%~1", "NetFx3"
 set "RollupPath=%~dp0Pack\RollupFix\%ImageVersion%.%ImageArch%"
 if exist "%RollupPath%" (
     %Dism% /Image:"%~1" /Add-Package /ScratchDir:"%TMP%" /PackagePath:"%RollupPath%"
     call :IntRecovery "%~1", "%RollupPath%"
 )
+if not exist "%~1\Windows\WinSxS\pending.xml" (
+    rem Enable DISM Image Cleanup with Full ResetBase...
+    call :MountImageRegistry "%~1"
+    Reg add "HKLM\TK_SOFTWARE\Microsoft\Windows\CurrentVersion\SideBySide\Configuration" /v "DisableComponentBackups" /t REG_DWORD /d "1" /f >nul
+    Reg add "HKLM\TK_SOFTWARE\Microsoft\Windows\CurrentVersion\SideBySide\Configuration" /v "SupersededActions" /t REG_DWORD /d "1" /f >nul
+    call :UnMountImageRegistry
+    %Dism% /Image:"%~1" /Cleanup-Image /ScratchDir:"%TMP%" /StartComponentCleanup
+) else (
+    %NSudo% cmd.exe /c del /q "%~1\Windows\WinSxS\ManifestCache\*.bin"
+    %NSudo% cmd.exe /c rd /s /q "%~1\Windows\WinSxS\Temp\PendingDeletes"
+    %NSudo% cmd.exe /c rd /s /q "%~1\Windows\WinSxS\Temp\TransformerRollbackData"
+    %NSudo% cmd.exe /c rd /s /q "%~1\Windows\CbsTemp"
+)
 endlocal
-%NSudo% cmd.exe /c rd /s /q "%~1\Windows\WinSxS\Temp\PendingDeletes"
-%NSudo% cmd.exe /c rd /s /q "%~1\Windows\WinSxS\ManifestCache"
 goto :eof
 
 rem 向 WinRe 集成更新 [ %~1 : 镜像挂载路径, %~2 更新包路径 ]
@@ -167,7 +172,7 @@ if not exist "%WinrePath%" (
     %Dism% /Mount-Wim /WimFile:"%~1\Windows\System32\Recovery\Winre.wim" /Index:1 /MountDir:"%TMP%\RE" /Quiet
     call :MountImageRegistry "%TMP%\RE"
     rem Enable DISM Image Cleanup with Full ResetBase...
-    Reg add "HKLM\TK_SOFTWARE\Microsoft\Windows\CurrentVersion\SideBySide\Configuration" /v "DisableResetbase" /t REG_DWORD /d "0" /f >nul
+    Reg add "HKLM\TK_SOFTWARE\Microsoft\Windows\CurrentVersion\SideBySide\Configuration" /v "DisableComponentBackups" /t REG_DWORD /d "1" /f >nul
     call :UnMountImageRegistry
     echo.集成更新 [%WinrePath%]
     %Dism% /Image:"%TMP%\RE" /Add-Package /ScratchDir:"%TMP%" /PackagePath:"%~2" /Quiet
@@ -202,13 +207,6 @@ call :ImportRegistry "%~dp0Pack\Optimize\%ImageShortVersion%.reg"
 call :ImportRegistry "%~dp0Pack\Optimize\%ImageShortVersion%.%ImageArch%.reg"
 if "%ImageType%" equ "Server" call :ImportRegistry "%~dp0Pack\Optimize\Server.reg"
 if "%ImageShortVersion%" equ "10.0" (
-    rem Applying Anti Microsoft Telemetry Client Patches
-    Reg add "HKLM\TK_SYSTEM\ControlSet001\Services\DiagTrack" /v "Start" /t REG_DWORD /d "4" /f >nul 2>&1
-    Reg delete "HKLM\TK_SYSTEM\ControlSet001\Control\WMI\AutoLogger\AutoLogger-Diagtrack-Listener" /f >nul 2>&1
-    Reg delete "HKLM\TK_SYSTEM\ControlSet001\Control\WMI\AutoLogger\Diagtrack-Listener" /f >nul 2>&1
-    Reg delete "HKLM\TK_SYSTEM\ControlSet001\Control\WMI\AutoLogger\SQMLogger" /f >nul 2>&1
-    Reg delete "HKLM\TK_SOFTWARE\Microsoft\Windows\CurrentVersion\Diagnostics\DiagTrack" /f >nul 2>&1
-    Reg delete "HKLM\TK_SOFTWARE\Policies\Microsoft\Windows\DataCollection" /f >nul 2>&1
     rem Removing Windows Mixed Reality Menu from Settings App
     Reg add "HKLM\TK_NTUSER\Software\Microsoft\Windows\CurrentVersion\Holographic" /v "FirstRunSucceeded" /t REG_DWORD /d "0" /f >nul
     rem 启用照片查看器, 删除 3D画图 右键
@@ -307,9 +305,17 @@ for /f %%i in ('"dir /b %Apps%\*%~2*.appxbundle" 2^>nul') do (
 endlocal
 goto :eof
 
+rem 禁用功能 [ %~1 : 镜像挂载路径, %~2 : 功能名称 ]
+:RemoveFeature
+for /f "tokens=4" %%f in ('%Dism% /English /Image:"%~1" /Get-Features ^| findstr Feature ^| findstr /i "%~2"') do (
+    echo.移除功能 [%%f]
+    %Dism% /Image:"%~1" /Disable-Feature /FeatureName:"%%f" /Remove
+)
+goto :eof
+
 rem 移除自带应用 [ %~1 : 镜像挂载路径 ]
 :RemoveAppx
-for /f "tokens=3" %%f in ('%Dism% /English /Image:"%~1" /Get-ProvisionedAppxPackages ^| findstr PackageName ^| findstr -V DesktopAppInstaller') do (
+for /f "tokens=3" %%f in ('%Dism% /English /Image:"%~1" /Get-ProvisionedAppxPackages ^| findstr PackageName') do (
     echo.移除应用 [%%f]
     %Dism% /Image:"%~1" /Remove-ProvisionedAppxPackage /PackageName:"%%f" /Quiet
 )

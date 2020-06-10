@@ -11,7 +11,7 @@ set "ESDPath=%~1"
 if "%ESDPath%" equ "" call :SelectFolder
 if "%ESDPath%" equ "" goto :Exit
 rem call :ExportISO "E G", "%~dp0install.wim"
-for %%i in (X64) do call :ExportRS5 "%ESDPath%", "%~dp0DVD_%%i", "%%i"
+for %%i in (X64) do call :Export19H1 "%ESDPath%", "%~dp0DVD_%%i", "%%i"
 goto :Exit
 
 :SelectFolder
@@ -42,31 +42,15 @@ if not exist "%WimPath%" goto :eof
 call :MakeISO "%WimPath%", "%~2"
 goto :eof
 
-rem 导出RS3镜像 [ %~1 : 源路径, %~2 : 目标路径, %~3 处理器架构 ]
-:ExportRS3
+rem 导出19H1镜像 [ %~1 : 源路径, %~2 : 目标路径, %~3 处理器架构 ]
+:Export19H1
 if not exist "%~1" echo [%~1] 不存在 && goto :eof
-set "WimPath=%~dp0install_RS3_%~3_%date:~0,4%%date:~5,2%%date:~8,2%.wim"
+set "WimPath=%~dp0install_19H1_%~3_%date:~0,4%%date:~5,2%%date:~8,2%.wim"
 call :RemoveFile "%WimPath%"
 call :RemoveFolder "%~2"
 rem 导出安装镜像
 for %%i in (china consumer business) do (
-    for %%j in ("%~1\*.rs3_release_*%%i*_%~3fre_*.esd") do (
-        if not exist "%~2" call :ExportDVD "%%j", "%~2"
-        call :ExportImage "%%j", "%WimPath%"
-    )
-)
-call :MakeISO "%WimPath%", "%~2"
-goto :eof
-
-rem 导出RS5镜像 [ %~1 : 源路径, %~2 : 目标路径, %~3 处理器架构 ]
-:ExportRS5
-if not exist "%~1" echo [%~1] 不存在 && goto :eof
-set "WimPath=%~dp0install_RS5_%~3_%date:~0,4%%date:~5,2%%date:~8,2%.wim"
-call :RemoveFile "%WimPath%"
-call :RemoveFolder "%~2"
-rem 导出安装镜像
-for %%i in (china consumer business) do (
-    for %%j in ("%~1\*.rs5_release_*%%i*_%~3fre_*.esd") do (
+    for %%j in ("%~1\*.19h2_release_*%%i*_%~3fre_*.esd") do (
         if not exist "%~2" call :ExportDVD "%%j", "%~2"
         call :ExportImage "%%j", "%WimPath%"
     )
@@ -82,7 +66,7 @@ rem 转换ESD镜像
 rem 生成ISO镜像
 for /f "tokens=3" %%f in ('%Dism% /English /Get-ImageInfo /ImageFile:"%~1" /Index:1 ^| findstr /i Architecture') do ( set "ImageArch=%%f" )
 for /f "tokens=3 delims=." %%f in ('%Dism% /English /Get-ImageInfo /ImageFile:"%~1" /Index:1 ^| findstr /i Version') do ( set "ImageRevision=%%f" )
-for /f "tokens=4" %%f in ('%Dism% /English /Get-ImageInfo /ImageFile:"%~1" /Index:1 ^| find "ServicePack Level"') do ( set "ImageBuild=%%f" )
+for /f "tokens=4" %%f in ('%Dism% /English /Get-ImageInfo /ImageFile:"%~1" /Index:1 ^| find "ServicePack Build"') do ( set "ImageBuild=%%f" )
 for /f "tokens=* delims=" %%f in ('Dism.exe /English /Get-ImageInfo /ImageFile:"%~1" /Index:1 ^| findstr /i Default') do ( set "ImageLanguage=%%f" )
 call "%~dp0MakeISO.cmd" "%~2" "Win10_%ImageRevision%.%ImageBuild%_%ImageArch%_%ImageLanguage:~1,-10%"
 rem 生成二合一镜像
@@ -106,7 +90,6 @@ for /f "tokens=3" %%f in ('%Dism% /English /Get-ImageInfo /ImageFile:"%~1" /Inde
 set "NetFx3Path=%~dp0Pack\NetFx3\%ImageVersion%.%ImageArch%"
 rem if not exist "%NetFx3Path%" xcopy /I /H /R /Y "%~2\sources\sxs" "%NetFx3Path%" >nul
 rem 清理无用文件
-del /q "%~2\setup.exe"
 del /q "%~2\autorun.inf"
 rd /s /q "%~2\support"
 rd /s /q "%~2\boot\zh-cn"
